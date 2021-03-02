@@ -6,11 +6,17 @@ import os
 from btree import Btree
 import shutil
 from misc import split_condition
+import pandas as pd
 
 class Database:
     '''
     Database class contains tables.
     '''
+    def groupby(str):
+        gb = db.groupby(['course','teaches'])
+        db.get_group('course_id')
+        print(gb)
+
 
     def __init__(self, name, load=True):
         self.tables = {}
