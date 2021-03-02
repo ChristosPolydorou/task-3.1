@@ -17,6 +17,11 @@ class Database:
         db.get_group('course_id')
         print(gb)
 
+        
+    def select_distinct(str):
+        sd = db.DataFrame(['The Music of Donovan', 'Mech. Eng.'],['Electron Microscopy', 'Mech. Eng.']),columns = ["course","section"]
+        sd = sd.drop_duplicates()
+        print(sd)
 
     def __init__(self, name, load=True):
         self.tables = {}
