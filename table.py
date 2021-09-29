@@ -23,48 +23,50 @@ class Table:
     '''
     def __init__(self, name=None, column_names=None, column_types=None, primary_key=None, load=None):
 
-        if load is not None:
-            # if load is a dict, replace the object dict with it (replaces the object with the specified one)
-            if isinstance(load, dict):
-                self.__dict__.update(load)
+            if load is not None:
+                # if load is a dict, replace the object dict with it (replaces the object with the specified one)
+                if isinstance(load, dict):
+                    self.__dict__.update(load)
+                    self._update()
+                # if load is str, load from a file
+                elif isinstance(load, str):
+                    self._load_from_file(load)
+
+            # if name, columns_names and column types are not none
+            elif (name is not None) and (column_names is not None) and (column_types is not None):
+
+                self._name = name
+
+                if len(column_names)!=len(column_types):
+                    raise ValueError('Need same number of column names and types.')
+
+                self.column_names = column_names
+
+                self.columns = []
+
+                for colmn in self.column_names:
+                    if colmn not in self.__dir__():
+                        # this is used in order to be able to call a column using its name as an attribute.
+                        # example: instead of table.columns['column_name'], we do table.column_name
+                        setattr(self, col, [])
+                        self.columns.append([])
+                    else:
+                        raise Exception(f'"{colmn}" attribute already exists in "{self.__class__.__name__} "class.')
+
+                self.column_types = column_types
+                self._no_of_columns = len(column_names)
+                self.data = [] # data is a list of lists, a list of rows that is.
+
+                # if primary key is set, keep its index as an attribute
+                if primary_key is None:
+                    self.pk_idx = None
+                elif (type(primary_key)==type('str')): #single column pr_key
+                    self.pk_idx = self.column_names.index(primary_key)
+                else:  # multicolumn primary key
+                    self.pk_idx = []
+                    for clumn in primary_key:
+                        (self.pk_idx).append(self.column_names.index(clumn))
                 self._update()
-            # if load is str, load from a file
-            elif isinstance(load, str):
-                self._load_from_file(load)
-
-        # if name, columns_names and column types are not none
-        elif (name is not None) and (column_names is not None) and (column_types is not None):
-
-            self._name = name
-
-            if len(column_names)!=len(column_types):
-                raise ValueError('Need same number of column names and types.')
-
-            self.column_names = column_names
-
-            self.columns = []
-
-            for col in self.column_names:
-                if col not in self.__dir__():
-                    # this is used in order to be able to call a column using its name as an attribute.
-                    # example: instead of table.columns['column_name'], we do table.column_name
-                    setattr(self, col, [])
-                    self.columns.append([])
-                else:
-                    raise Exception(f'"{col}" attribute already exists in "{self.__class__.__name__} "class.')
-
-            self.column_types = column_types
-            self._no_of_columns = len(column_names)
-            self.data = [] # data is a list of lists, a list of rows that is.
-
-            # if primary key is set, keep its index as an attribute
-            if primary_key is not None:
-                self.pk_idx = self.column_names.index(primary_key)
-            else:
-                self.pk_idx = None
-
-
-            self._update()
 
     # if any of the name, columns_names and column types are none. return an empty table object
 
@@ -74,7 +76,7 @@ class Table:
         Update all the available column with the appended rows.
         '''
         self.columns = [[row[i] for row in self.data] for i in range(self._no_of_columns)]
-        for ind, col in enumerate(self.column_names):
+        for ind, colmn in enumerate(self.column_names):
             setattr(self, col, self.columns[ind])
 
     def _cast_column(self, column_name, cast_type):
@@ -92,30 +94,45 @@ class Table:
 
 
     def _insert(self, row, insert_stack=[]):
-        '''
-        Insert row to table
-        '''
-        if len(row)!=self._no_of_columns:
-            raise ValueError(f'ERROR -> Cannot insert {len(row)} values. Only {self._no_of_columns} columns exist')
+            '''
+            Insert row to table
+            '''
+            if len(row)!=self._no_of_columns:
+                raise ValueError(f'ERROR -> Cannot insert {len(row)} values. Only {self._no_of_columns} columns exist')
+            for i in range(len(row)):
+                # for each value, cast and replace it in row.
+                try:
+                    row[i] = self.column_types[i](row[i])
 
-        for i in range(len(row)):
-            # for each value, cast and replace it in row.
-            try:
-                row[i] = self.column_types[i](row[i])
+                except:
+                    raise ValueError(f'ERROR -> Value {row[i]} is not of type {self.column_types[i]}.')
 
-            except:
-                raise ValueError(f'ERROR -> Value {row[i]} is not of type {self.column_types[i]}.')
+                # if value is to be appended to the primary_key column, check that it doesnt already exist (no duplicate primary keys)
+                # single column primary_key
+                if isinstance(self.pk_idx,int):
+                    if i == self.pk_idx and row[i] in self.columns[i]:
+                        raise ValueError(f'## ERROR -> Value {row[i]} already exists in primary key column.')
+                    else:
+                        print('placeholder text')
+            #print(self.data)
+            # multicolumn primary_key
+            if isinstance(self.pk_idx,list):
+                tempList = [row[col] for colmn in self.pk_idx]
+                for testRow in self.data:
+                    isFound = True # indicates if duplicate row is found
+                    for el in tempList:
+                        if el not in testRow:
+                            isFound = False
+                            break
+                    if isFound:
+                        raise ValueError(f'## ERROR -> Values {tempList} already exist in primary key columns.')
 
-            # if value is to be appended to the primary_key column, check that it doesnt alrady exist (no duplicate primary keys)
-            if i==self.pk_idx and row[i] in self.columns[self.pk_idx]:
-                raise ValueError(f'## ERROR -> Value {row[i]} already exists in primary key column.')
-
-        # if insert_stack is not empty, append to its last index
-        if insert_stack != []:
-            self.data[insert_stack[-1]] = row
-        else: # else append to the end
-            self.data.append(row)
-        self._update()
+            # if insert_stack is not empty, append to its last index
+            if insert_stack != []:
+                self.data[insert_stack[-1]] = row
+            else: # else append to the end
+                self.data.append(row)
+            self._update()
 
     def _update_row(self, set_value, set_column, condition):
         '''
@@ -123,20 +140,16 @@ class Table:
         '''
         # parse the condition
         column_name, operator, value = self._parse_condition(condition)
-
         # get the condition and the set column
         column = self.columns[self.column_names.index(column_name)]
         set_column_idx = self.column_names.index(set_column)
-
         # set_columns_indx = [self.column_names.index(set_column_name) for set_column_name in set_column_names]
-
-        # for each value in column, if condition, replace it with set_value
+        # for each value in column, if condition, replace it with
+        set_value
         for row_ind, column_value in enumerate(column):
-            if get_op(operator, column_value, value):
-                self.data[row_ind][set_column_idx] = set_value
-
+        if get_op(operator, column_value, value):
+        self.data[row_ind][set_column_idx] = set_value
         self._update()
-                # print(f"Updated {len(indexes_to_del)} rows")
 
 
     def _delete_where(self, condition):
